@@ -1,0 +1,10 @@
+{
+  "description": "Manage customer subscriptions, track expirations, and send SMS reminders with a streamlined admin dashboard designed for small cable TV companies.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
