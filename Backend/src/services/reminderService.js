@@ -11,6 +11,10 @@ const reminders = [
 ];
 let executionInProgress = false;
 
+const logEvent = (level, event, details = {}) => {
+    console[level](JSON.stringify({ event, ...details }));
+};
+
 const istDayNumber = (date) => {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: IST_TIMEZONE,
@@ -52,14 +56,13 @@ const replaceTemplatePlaceholders = (template, customer, expiryDate, daysLeft) =
     .replaceAll("{expiryDate}", formatIstDate(expiryDate))
     .replaceAll("{daysLeft}", String(daysLeft));
 
-const checkExpiryReminders = async () => {
+const checkExpiryReminders = async (runContext = {}) => {
     if (executionInProgress) {
-        console.warn("Reminder execution skipped: another execution is still in progress");
+        logEvent("warn", "reminder_processing_skipped", { reason: "process_overlap" });
         return;
     }
 
     executionInProgress = true;
-    console.log(`Reminder execution started (${new Date().toISOString()})`);
 
     try {
         const customers = await Customer.find();
@@ -68,7 +71,7 @@ const checkExpiryReminders = async () => {
             const settings = await completeSettings();
             templates = settings.smsTemplates;
         } catch {
-            console.error("Unable to load SMS templates; using defaults");
+            logEvent("error", "reminder_templates_load_failed", { usingDefaults: true });
         }
         const today = istDayNumber(new Date());
         const eligibleCustomers = [];
@@ -92,12 +95,18 @@ const checkExpiryReminders = async () => {
             }
         }
 
-        const eligibleCounts = reminders.map(({ field, label }) => (
-            `${label}=${eligibleCustomers.filter(({ reminder }) => reminder.field === field).length}`
-        ));
-        console.log(
-            `Reminder eligibility: customers=${customers.length}, ${eligibleCounts.join(", ")}, invalidExpiryDates=${invalidExpiryDates}`
-        );
+        logEvent("log", "reminder_eligibility_checked", {
+            runDate: runContext.runDate,
+            startedAtIST: runContext.startedAtIST,
+            customerCount: customers.length,
+            eligibleByReminder: Object.fromEntries(
+                reminders.map(({ field, label }) => [
+                    label,
+                    eligibleCustomers.filter(({ reminder }) => reminder.field === field).length
+                ])
+            ),
+            invalidExpiryDateCount: invalidExpiryDates
+        });
 
         let sentCount = 0;
         let failedCount = 0;
@@ -113,7 +122,10 @@ const checkExpiryReminders = async () => {
                 await sendSMS(customer.phone, message);
             } catch (error) {
                 failedCount += 1;
-                console.error(`SMS failed (reminder=${reminder.label}, error=${error.name})`);
+                logEvent("error", "reminder_sms_failed", {
+                    reminder: reminder.label,
+                    error: error.name
+                });
                 continue;
             }
 
@@ -123,19 +135,24 @@ const checkExpiryReminders = async () => {
                 await customer.save();
             } catch (error) {
                 failedCount += 1;
-                console.error(
-                    `SMS accepted but reminder status save failed (reminder=${reminder.label}, error=${error.name})`
-                );
+                logEvent("error", "reminder_status_save_failed_after_sms_acceptance", {
+                    reminder: reminder.label,
+                    error: error.name
+                });
                 continue;
             }
 
             sentCount += 1;
-            console.log(`SMS sent successfully (reminder=${reminder.label})`);
+            logEvent("log", "reminder_sms_sent", { reminder: reminder.label });
         }
 
-        console.log(`Reminder execution completed: sent=${sentCount}, failed=${failedCount}`);
+        logEvent("log", "reminder_processing_completed", {
+            runDate: runContext.runDate,
+            sentCount,
+            failedCount
+        });
     } catch (error) {
-        console.error(`Reminder execution failed unexpectedly (error=${error.name})`);
+        logEvent("error", "reminder_processing_failed", { error: error.name });
         throw error;
     } finally {
         executionInProgress = false;

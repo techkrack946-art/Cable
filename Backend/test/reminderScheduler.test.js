@@ -1,6 +1,13 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createReminderScheduler, getIstDateKey } = require("../src/services/reminderScheduler");
+const {
+    createReminderScheduler,
+    formatIstDateTime,
+    getIstDateKey,
+    IST_TIMEZONE,
+    isReminderTimeReached,
+    REMINDER_CRON_EXPRESSION
+} = require("../src/services/reminderScheduler");
 
 const createRunStore = (records = new Map()) => ({
     records,
@@ -60,7 +67,12 @@ const createHarness = ({
         smsDeliveryCount += 1;
     };
     const executeReminders = runReminders || (async () => smsDelivery());
-    const logger = { log() {}, warn() {}, error() {} };
+    const logs = [];
+    const logger = {
+        log(message) { logs.push(JSON.parse(message)); },
+        warn(message) { logs.push(JSON.parse(message)); },
+        error(message) { logs.push(JSON.parse(message)); }
+    };
     const scheduler = createReminderScheduler({
         DailyReminderRun: createRunStore(records),
         runReminders: executeReminders,
@@ -72,9 +84,21 @@ const createHarness = ({
     return {
         scheduler,
         records,
+        logs,
         getSmsDeliveryCount: () => smsDeliveryCount
     };
 };
+
+test("daily cron configuration is 09:00 Asia/Kolkata", () => {
+    assert.equal(REMINDER_CRON_EXPRESSION, "0 9 * * *");
+    assert.equal(IST_TIMEZONE, "Asia/Kolkata");
+    assert.equal(
+        formatIstDateTime(new Date("2026-10-14T03:30:00.000Z")),
+        "2026-10-14T09:00:00+05:30"
+    );
+    assert.equal(isReminderTimeReached(new Date("2026-10-14T03:29:59.000Z")), false);
+    assert.equal(isReminderTimeReached(new Date("2026-10-14T03:30:00.000Z")), true);
+});
 
 test("startup before 09:00 IST waits for the cron schedule", async () => {
     const harness = createHarness({ currentTime: "2026-10-14T03:29:59.000Z" });
@@ -90,6 +114,17 @@ test("startup after 09:00 IST recovers today's missed run once", async () => {
     assert.deepEqual(await harness.scheduler.recoverOnStartup(), { status: "completed" });
     assert.equal(harness.getSmsDeliveryCount(), 1);
     assert.equal(harness.records.get("2026-10-14").status, "completed");
+    assert.deepEqual(
+        harness.logs.find(({ event }) => event === "reminder_run_started"),
+        {
+            event: "reminder_run_started",
+            runDate: "2026-10-14",
+            startedAtIST: "2026-10-14T09:30:00+05:30",
+            trigger: "startup_recovery"
+        }
+    );
+    assert.ok(harness.logs.some(({ event }) => event === "reminder_run_completed"));
+    assert.ok(harness.logs.some(({ event }) => event === "reminder_startup_recovery_checked"));
 });
 
 test("repeated restarts do not rerun a completed day", async () => {

@@ -10,7 +10,11 @@ const smsRoutes = require("./routes/smsRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const { checkExpiryReminders } = require("./services/reminderService");
 const DailyReminderRun = require("./models/dailyReminderRun");
-const { createReminderScheduler } = require("./services/reminderScheduler");
+const {
+    createReminderScheduler,
+    IST_TIMEZONE,
+    REMINDER_CRON_EXPRESSION
+} = require("./services/reminderScheduler");
 
 const app = express();
 
@@ -61,17 +65,24 @@ const startReminderScheduler = () => {
         runReminders: checkExpiryReminders
     });
     const scheduledTask = cron.schedule(
-        "0 9 * * *",
+        REMINDER_CRON_EXPRESSION,
         async () => {
             try {
                 await scheduler.runScheduled();
             } catch (error) {
-                console.error(`Scheduled reminder run failed (error=${error.name})`);
+                console.error(JSON.stringify({
+                    event: "scheduled_reminder_callback_failed",
+                    error: error.name
+                }));
             }
         },
-        { timezone: "Asia/Kolkata", noOverlap: true }
+        { timezone: IST_TIMEZONE, noOverlap: true }
     );
-    console.log("Reminder scheduler registered (cron: 0 9 * * *, timezone: Asia/Kolkata)");
+    console.log(JSON.stringify({
+        event: "reminder_scheduler_registered",
+        cron: REMINDER_CRON_EXPRESSION,
+        timezone: IST_TIMEZONE
+    }));
     global[reminderSchedulerKey] = { scheduler, scheduledTask };
     return global[reminderSchedulerKey];
 };
@@ -83,7 +94,10 @@ const startServer = async () => {
     try {
         await scheduler.recoverOnStartup();
     } catch (error) {
-        console.error(`Startup reminder recovery failed (error=${error.name})`);
+        console.error(JSON.stringify({
+            event: "startup_reminder_recovery_failed",
+            error: error.name
+        }));
     }
 
     app.listen(PORT, () => {
