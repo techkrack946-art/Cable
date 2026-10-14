@@ -189,7 +189,7 @@ function Dashboard({ customers, expiryDashboard, loading, onNavigate, onRecharge
       <div className="panel-heading"><div><h2>Customers Expiring Soon</h2><p>Upcoming expiries that may need a reminder</p></div><button className="text-button" onClick={() => onNavigate("Customers")}>View all <Icon name="arrow" size={16} /></button></div>
       <EmptyTableScroll><table><thead><tr><th>Customer</th><th>Mobile</th><th>Plan</th><th>Expiry Date</th><th>Days Left</th><th>SMS</th><th>Action</th></tr></thead><tbody>
         {loading && <tr><td colSpan={7}>Loading customers...</td></tr>}
-        {!loading && expiring.map(({ customer, daysLeft }) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customer.name.split(" ").map((name) => name[0]).join("")}</span><strong>{customer.name}</strong></div></td><td>{customer.phone}</td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><span className="days">{daysLeft} days</span></td><td><StatusBadge status={smsStatus(customer)} /></td><td><button className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button></td></tr>)}
+        {!loading && expiring.map(({ customer, daysLeft }) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customer.name.split(" ").map((name) => name[0]).join("")}</span><strong>{customer.name}</strong></div></td><td>{customer.phone}</td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><span className="days">{daysLeft} days</span></td><td><StatusBadge status={smsStatus(customer)} /></td><td><button type="button" className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button></td></tr>)}
         {!loading && !expiring.length && <tr><td colSpan={7}>No customers are expiring in the next 3 days.</td></tr>}
       </tbody></table></EmptyTableScroll>
     </section>
@@ -230,7 +230,7 @@ function Customers({ customers, expiryDashboard, filter, loading, deletingCustom
     <section className="panel"><div className="toolbar"><div className="customer-controls"><label className="search-box"><Icon name="search" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, mobile, or STB number" /></label><select className="customer-sort" aria-label="Sort customers by name" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}><option value="original">Original order</option><option value="name-asc">Name: A–Z</option><option value="name-desc">Name: Z–A</option></select></div><span className="record-count">{loading ? "Loading..." : `${results.length} customers shown${filterLabel}`}</span></div>
       <EmptyTableScroll><table><thead><tr><th>Name</th><th>Mobile</th><th>STB Number</th><th>Plan</th><th>Expiry Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         {loading && <tr><td colSpan={7}>Loading customers...</td></tr>}
-        {!loading && results.map((customer) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customerName(customer).split(/\s+/).filter(Boolean).map((name) => name[0]).join("")}</span><strong>{customerName(customer)}</strong></div></td><td>{customer.phone}</td><td><span className="mono">{customer.stbNumber}</span></td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><StatusBadge status={customerStatus(customer)} /></td><td><div className="action-group"><button className="row-action muted" onClick={() => onEdit(customer)}><Icon name="edit" size={13} /> Edit</button><button className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button><button className="row-action danger" onClick={() => onDelete(customer)} disabled={deletingCustomerId === customer._id}><Icon name="trash" size={13} /> {deletingCustomerId === customer._id ? "Deleting..." : "Delete"}</button></div></td></tr>)}
+        {!loading && results.map((customer) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customerName(customer).split(/\s+/).filter(Boolean).map((name) => name[0]).join("")}</span><strong>{customerName(customer)}</strong></div></td><td>{customer.phone}</td><td><span className="mono">{customer.stbNumber}</span></td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><StatusBadge status={customerStatus(customer)} /></td><td><div className="action-group"><button type="button" className="row-action muted" onClick={() => onEdit(customer)}><Icon name="edit" size={13} /> Edit</button><button type="button" className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button><button type="button" className="row-action danger" onClick={() => onDelete(customer)} disabled={deletingCustomerId === customer._id}><Icon name="trash" size={13} /> {deletingCustomerId === customer._id ? "Deleting..." : "Delete"}</button></div></td></tr>)}
         {!loading && !results.length && <tr><td colSpan={7}>No customers found.</td></tr>}
       </tbody></table></EmptyTableScroll>
     </section>
@@ -240,7 +240,7 @@ function Customers({ customers, expiryDashboard, filter, loading, deletingCustom
 function Recharges({ customers, loading, onRecharge }: { customers: Customer[]; loading: boolean; onRecharge: (customer?: Customer) => void }) {
   return <><PageHeading title="Recharges" subtitle="Review and record customer recharge activity."><Button icon="plus" onClick={() => onRecharge()}>New Recharge</Button></PageHeading><div className="notice"><div className="notice-icon"><Icon name="refresh" size={20} /></div><div><strong>Record keeping only</strong><p>Recharges saved here update expiry tracking. No online payment is processed.</p></div></div><section className="panel"><div className="panel-heading"><div><h2>Customer Recharge Details</h2><p>Current recharge dates and expiry tracking</p></div></div><EmptyTableScroll><table><thead><tr><th>Customer</th><th>Plan</th><th>Amount</th><th>Recharge Date</th><th>New Expiry</th><th>Action</th></tr></thead><tbody>
     {loading && <tr><td colSpan={6}>Loading customers...</td></tr>}
-    {!loading && customers.map((customer) => <tr key={customer._id}><td><strong>{customer.name}</strong></td><td>{customer.plan}</td><td className="amount">₹{customer.amount}.00</td><td>{formatDate(customer.rechargeDate)}</td><td>{formatDate(customer.expiryDate)}</td><td><button className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button></td></tr>)}
+    {!loading && customers.map((customer) => <tr key={customer._id}><td><strong>{customer.name}</strong></td><td>{customer.plan}</td><td className="amount">₹{customer.amount}.00</td><td>{formatDate(customer.rechargeDate)}</td><td>{formatDate(customer.expiryDate)}</td><td><button type="button" className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button></td></tr>)}
     {!loading && !customers.length && <tr><td colSpan={6}>No customer recharge data available.</td></tr>}
   </tbody></table></EmptyTableScroll></section></>;
 }
@@ -438,6 +438,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [deletingCustomerId, setDeletingCustomerId] = useState<string>();
+  const deletingCustomerIds = useRef(new Set<string>());
   const notificationDesktopRef = useRef<HTMLDivElement>(null);
   const notificationMobileRef = useRef<HTMLDivElement>(null);
   const profileSidebarRef = useRef<HTMLDivElement>(null);
@@ -493,14 +494,31 @@ export default function App() {
 
   const handleDelete = async (customer: Customer) => {
     if (!window.confirm(`Delete ${customer.name}?`)) return;
+    if (deletingCustomerIds.current.has(customer._id)) return;
+    deletingCustomerIds.current.add(customer._id);
     setDeletingCustomerId(customer._id);
     setSuccessMessage("");
     try {
       await deleteCustomer(customer._id);
-      await refreshData();
+      setCustomers((current) => current.filter((item) => item._id !== customer._id));
+      setExpiryDashboard((current) => ({
+        threeDays: current.threeDays.filter((item) => item._id !== customer._id),
+        twoDays: current.twoDays.filter((item) => item._id !== customer._id),
+        oneDay: current.oneDay.filter((item) => item._id !== customer._id),
+        expired: current.expired.filter((item) => item._id !== customer._id),
+      }));
+      setError("");
+      setSuccessMessage("Customer deleted successfully.");
+
+      try {
+        setExpiryDashboard(await getExpiryDashboard());
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : "Customer deleted, but dashboard data could not be refreshed.");
+      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to delete customer.");
     } finally {
+      deletingCustomerIds.current.delete(customer._id);
       setDeletingCustomerId(undefined);
     }
   };
