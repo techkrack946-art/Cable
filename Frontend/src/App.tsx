@@ -363,30 +363,35 @@ function Field({ label, name, defaultValue, type = "text", as = "input", require
 }
 
 function ModalShell({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) {
-  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true"><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="icon-button" onClick={onClose} aria-label="Close"><Icon name="close" /></button></div>{children}</div></div>;
+  return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true"><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><Icon name="close" /></button></div>{children}</div></div>;
 }
 
-function CustomerModal({ customer, onClose, onSaved }: { customer?: Customer; onClose: () => void; onSaved: () => Promise<void> }) {
+function CustomerModal({ customer, onClose, onSaved }: { customer?: Customer; onClose: () => void; onSaved: (savedCustomer: Customer, created: boolean) => Promise<void> }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const submissionInProgress = useRef(false);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submissionInProgress.current) return;
+    submissionInProgress.current = true;
     setSaving(true);
     setError("");
     const values = Object.fromEntries(new FormData(event.currentTarget));
     const data = { name: values.name, phone: values.phone, stbNumber: values.stbNumber, plan: values.plan, amount: Number(values.amount), rechargeDate: values.rechargeDate };
     try {
-      if (customer) await updateCustomer(customer._id, data);
-      else await createCustomer(data);
-      await onSaved();
+      const savedCustomer = customer
+        ? await updateCustomer(customer._id, data)
+        : await createCustomer(data);
+      await onSaved(savedCustomer, !customer);
       onClose();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to save customer.");
     } finally {
+      submissionInProgress.current = false;
       setSaving(false);
     }
   };
-  return <ModalShell title={customer ? "Edit Customer" : "Add Customer"} subtitle={customer ? "Update customer connection details." : "Create a new cable TV customer record."} onClose={onClose}><form onSubmit={submit}><div className="form-grid"><Field label="Customer Name" name="name" defaultValue={customer?.name} required /><Field label="Mobile Number" name="phone" defaultValue={customer?.phone} required /><Field label="STB Number" name="stbNumber" defaultValue={customer?.stbNumber} required /><Field label="Plan" name="plan" as="select" defaultValue={customer?.plan || "Basic"} required /><Field label="Recharge Amount" name="amount" type="number" defaultValue={customer ? String(customer.amount) : ""} required /><Field label="Recharge Date" name="rechargeDate" type="date" defaultValue={inputDate(customer?.rechargeDate) || todayInputDate()} required /></div>{error && <p className="field-error">{error}</p>}  <div className="modal-footer"><Button variant="secondary" icon="x" onClick={onClose}>Cancel</Button><Button type="submit" icon={customer ? "save" : "userPlus"} disabled={saving}>{saving ? "Saving..." : customer ? "Save Customer" : "Add Customer"}</Button></div></form></ModalShell>;
+  return <ModalShell title={customer ? "Edit Customer" : "Add Customer"} subtitle={customer ? "Update customer connection details." : "Create a new cable TV customer record."} onClose={onClose}><form onSubmit={submit}><div className="form-grid"><Field label="Customer Name" name="name" defaultValue={customer?.name} required /><Field label="Mobile Number" name="phone" defaultValue={customer?.phone} required /><Field label="STB Number" name="stbNumber" defaultValue={customer?.stbNumber} required /><Field label="Plan" name="plan" as="select" defaultValue={customer?.plan || "Basic"} required /><Field label="Recharge Amount" name="amount" type="number" defaultValue={customer ? String(customer.amount) : ""} required /><Field label="Recharge Date" name="rechargeDate" type="date" defaultValue={inputDate(customer?.rechargeDate) || todayInputDate()} required /></div>{error && <p className="field-error">{error}</p>}  <div className="modal-footer"><Button type="button" variant="secondary" icon="x" onClick={onClose}>Cancel</Button><Button type="submit" icon={customer ? "save" : "userPlus"} disabled={saving}>{saving ? "Saving..." : customer ? "Save Customer" : "Add Customer"}</Button></div></form></ModalShell>;
 }
 
 function RechargeModal({ customer, customers, onClose, onSaved }: { customer?: Customer; customers: Customer[]; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -407,7 +412,7 @@ function RechargeModal({ customer, customers, onClose, onSaved }: { customer?: C
       setSaving(false);
     }
   };
-  return <ModalShell title="Record Recharge" subtitle="This records a recharge only. No payment will be processed." onClose={onClose}><form onSubmit={submit}><div className="form-grid single"><label className="field"><span>Customer</span><select name="customerId" defaultValue={customer?._id || customers[0]?._id || ""} required><option value="" disabled>Select a customer</option>{customers.map((item) => <option value={item._id} key={item._id}>{item.name} - {item.stbNumber}</option>)}</select></label><Field label="Amount" name="amount" type="number" defaultValue={customer ? String(customer.amount) : ""} required /><Field label="Recharge Date" name="rechargeDate" type="date" defaultValue={todayInputDate()} required /></div>{error && <p className="field-error">{error}</p>}<div className="modal-footer"><Button variant="secondary" icon="x" onClick={onClose}>Cancel</Button><Button type="submit" icon="save" disabled={saving || !customers.length}>{saving ? "Processing..." : "Save Recharge"}</Button></div></form></ModalShell>;
+  return <ModalShell title="Record Recharge" subtitle="This records a recharge only. No payment will be processed." onClose={onClose}><form onSubmit={submit}><div className="form-grid single"><label className="field"><span>Customer</span><select name="customerId" defaultValue={customer?._id || customers[0]?._id || ""} required><option value="" disabled>Select a customer</option>{customers.map((item) => <option value={item._id} key={item._id}>{item.name} - {item.stbNumber}</option>)}</select></label><Field label="Amount" name="amount" type="number" defaultValue={customer ? String(customer.amount) : ""} required /><Field label="Recharge Date" name="rechargeDate" type="date" defaultValue={todayInputDate()} required /></div>{error && <p className="field-error">{error}</p>}<div className="modal-footer"><Button type="button" variant="secondary" icon="x" onClick={onClose}>Cancel</Button><Button type="submit" icon="save" disabled={saving || !customers.length}>{saving ? "Processing..." : "Save Recharge"}</Button></div></form></ModalShell>;
 }
 
 export default function App() {
@@ -431,6 +436,7 @@ export default function App() {
   const [expiryDashboard, setExpiryDashboard] = useState<ExpiryDashboard>(emptyExpiryDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [deletingCustomerId, setDeletingCustomerId] = useState<string>();
   const notificationDesktopRef = useRef<HTMLDivElement>(null);
   const notificationMobileRef = useRef<HTMLDivElement>(null);
@@ -488,6 +494,7 @@ export default function App() {
   const handleDelete = async (customer: Customer) => {
     if (!window.confirm(`Delete ${customer.name}?`)) return;
     setDeletingCustomerId(customer._id);
+    setSuccessMessage("");
     try {
       await deleteCustomer(customer._id);
       await refreshData();
@@ -498,7 +505,21 @@ export default function App() {
     }
   };
 
-  const openCustomer = (customer?: Customer) => { setEditingCustomer(customer); setModal("customer"); };
+  const handleCustomerSaved = async (savedCustomer: Customer, created: boolean) => {
+    setCustomers((current) => created
+      ? [...current, savedCustomer]
+      : current.map((customer) => customer._id === savedCustomer._id ? savedCustomer : customer));
+    setError("");
+    setSuccessMessage(created ? "Customer added successfully." : "Customer updated successfully.");
+
+    try {
+      setExpiryDashboard(await getExpiryDashboard());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Customer saved, but dashboard data could not be refreshed.");
+    }
+  };
+
+  const openCustomer = (customer?: Customer) => { setSuccessMessage(""); setEditingCustomer(customer); setModal("customer"); };
   const openRecharge = (customer?: Customer) => { setRechargeCustomer(customer); setModal("recharge"); };
 
   const notificationCount = getNotificationIds(expiryDashboard).filter((id) => !dismissedNotificationIds.has(id)).length;
@@ -524,8 +545,8 @@ export default function App() {
     <aside className="sidebar"><button className="brand brand-link" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={23} /></span><div><strong>CableConnect</strong><span>Village Cable Network</span></div></button><nav>{navItems.map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => navigate(item.label)}><Icon name={item.icon} size={19} />{item.label}{page === item.label && <span className="nav-indicator" />}</button>)}</nav><div className="sidebar-foot" ref={profileSidebarRef}><button className="profile-trigger" onClick={() => toggleProfile("sidebar")} aria-expanded={profileOpen && profileSource === "sidebar"} aria-label="Open administrator profile"><div className="admin-avatar">AD</div><div><strong>Administrator</strong><span>Village Cable Network</span></div><Icon name="chevron" size={16} /></button>{profileOpen && profileSource === "sidebar" && <ProfileMenu onNavigate={navigate} onClose={() => setProfileOpen(false)} />}</div></aside>
     <div className="mobile-header"><button className="brand brand-link" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={20} /></span><div><strong>CableConnect</strong><span>Village Cable Network</span></div></button><div className="header-popover" ref={notificationMobileRef}><button className="icon-button has-dot" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label={`Open notifications${notificationCount ? `, ${notificationCount} alerts` : ""}`} aria-expanded={notificationsOpen}><Icon name="bell" size={20} />{notificationCount > 0 && <span className="notification-count">{notificationCount}</span>}</button>{notificationsOpen && <NotificationPanel expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onClose={() => setNotificationsOpen(false)} dismissedIds={dismissedNotificationIds} onDismiss={dismissNotification} />}</div></div>
     <div className="mobile-nav">{navItems.map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => setPage(item.label)}><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}</div>
-    <main><header className="topbar"><div className="topbar-date"><button className="header-brand" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={18} /></span><span><strong>CableConnect</strong><small>Village Cable Network</small></span></button><span>{formatDate(new Date().toISOString())}</span></div><div className="topbar-actions"><div className="header-popover" ref={notificationDesktopRef}><button className="icon-button has-dot" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label={`Open notifications${notificationCount ? `, ${notificationCount} alerts` : ""}`} aria-expanded={notificationsOpen}><Icon name="bell" size={20} />{notificationCount > 0 && <span className="notification-count">{notificationCount}</span>}</button>{notificationsOpen && <NotificationPanel expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onClose={() => setNotificationsOpen(false)} dismissedIds={dismissedNotificationIds} onDismiss={dismissNotification} />}</div><div className="header-popover" ref={profileDesktopRef}><button className="top-avatar profile-trigger-button" onClick={() => toggleProfile("top")} aria-label="Open administrator profile" aria-expanded={profileOpen && profileSource === "top"}>AD</button>{profileOpen && profileSource === "top" && <ProfileMenu onNavigate={navigate} onClose={() => setProfileOpen(false)} />}</div></div></header><div className="content">{error && <ErrorNotice message={error} />}{page === "Dashboard" && <Dashboard customers={customers} expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onRecharge={openRecharge} />}{page === "Customers" && <Customers customers={customers} expiryDashboard={expiryDashboard} filter={customerFilter} loading={loading} deletingCustomerId={deletingCustomerId} onAdd={() => openCustomer()} onEdit={openCustomer} onRecharge={openRecharge} onDelete={handleDelete} />}{page === "Recharges" && <Recharges customers={customers} loading={loading} onRecharge={openRecharge} />}{page === "SMS" && <SmsHistory customers={customers} />}{page === "Settings" && <Settings />}</div></main>
-    {modal === "customer" && <CustomerModal customer={editingCustomer} onClose={() => setModal(null)} onSaved={refreshData} />}
+    <main><header className="topbar"><div className="topbar-date"><button className="header-brand" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={18} /></span><span><strong>CableConnect</strong><small>Village Cable Network</small></span></button><span>{formatDate(new Date().toISOString())}</span></div><div className="topbar-actions"><div className="header-popover" ref={notificationDesktopRef}><button className="icon-button has-dot" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label={`Open notifications${notificationCount ? `, ${notificationCount} alerts` : ""}`} aria-expanded={notificationsOpen}><Icon name="bell" size={20} />{notificationCount > 0 && <span className="notification-count">{notificationCount}</span>}</button>{notificationsOpen && <NotificationPanel expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onClose={() => setNotificationsOpen(false)} dismissedIds={dismissedNotificationIds} onDismiss={dismissNotification} />}</div><div className="header-popover" ref={profileDesktopRef}><button className="top-avatar profile-trigger-button" onClick={() => toggleProfile("top")} aria-label="Open administrator profile" aria-expanded={profileOpen && profileSource === "top"}>AD</button>{profileOpen && profileSource === "top" && <ProfileMenu onNavigate={navigate} onClose={() => setProfileOpen(false)} />}</div></div></header><div className="content">{error && <ErrorNotice message={error} />}{successMessage && <div className="notice" role="status"><div><strong>{successMessage}</strong></div></div>}{page === "Dashboard" && <Dashboard customers={customers} expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onRecharge={openRecharge} />}{page === "Customers" && <Customers customers={customers} expiryDashboard={expiryDashboard} filter={customerFilter} loading={loading} deletingCustomerId={deletingCustomerId} onAdd={() => openCustomer()} onEdit={openCustomer} onRecharge={openRecharge} onDelete={handleDelete} />}{page === "Recharges" && <Recharges customers={customers} loading={loading} onRecharge={openRecharge} />}{page === "SMS" && <SmsHistory customers={customers} />}{page === "Settings" && <Settings />}</div></main>
+    {modal === "customer" && <CustomerModal customer={editingCustomer} onClose={() => setModal(null)} onSaved={handleCustomerSaved} />}
     {modal === "recharge" && <RechargeModal customer={rechargeCustomer} customers={customers} onClose={() => setModal(null)} onSaved={refreshData} />}
   </div>;
 }
