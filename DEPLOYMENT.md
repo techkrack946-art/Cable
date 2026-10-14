@@ -43,13 +43,22 @@ Render supplies `PORT`. The backend also accepts a local fallback of `5000`.
 Never put MongoDB or TextBee values in frontend variables.
 
 The reminder job is scheduled by `node-cron` at 09:00
-`Asia/Kolkata`. It runs an immediate reminder check during startup as well.
-Because this scheduler is inside the API process, use an always-on Render
-service. A sleeping/free web service cannot guarantee the 09:00 reminder
-execution. For horizontal scaling, move the scheduler into one dedicated
-always-on worker or an external scheduled job before running multiple API
-instances; otherwise duplicate scheduler processes could each attempt a send,
-even though the existing per-customer flags prevent most duplicate sends.
+`Asia/Kolkata`. On startup at or after 09:00 IST, it checks MongoDB for that
+IST date's run record and recovers the overdue run only if it is not already
+completed. The scheduled execution and startup recovery share a MongoDB-backed
+claim, preventing duplicate daily runs across normal restarts and concurrent
+backend instances. An in-progress claim expires after five minutes without a
+renewal, allowing a later process to recover work if the previous process
+stopped unexpectedly. If startup finds a non-expired claim, it retries when
+that claim expires; an active run renews its claim while it is working.
+
+This does not replace an always-on Render service: if the service is down at
+09:00, the run occurs only when it starts again that same IST calendar day.
+A sleeping/free web service cannot guarantee prompt execution. If TextBee
+accepts an SMS but the process crashes before the matching customer
+notification flag is saved, a recovered run may send that SMS again; the SMS
+provider and MongoDB update cannot be made one atomic transaction. Existing
+customer flags prevent repeats for sends whose status was saved successfully.
 
 Verify:
 
@@ -114,4 +123,9 @@ in `Frontend/.env.local`.
 - TextBee credentials are present only in Render backend variables.
 - The 3-day, 2-day, and 1-day reminder categories retain their existing
   duplicate-prevention flags.
-- Reminder logs contain no API keys or connection strings.
+- Render logs show `Reminder scheduler registered (cron: 0 9 * * *,
+  timezone: Asia/Kolkata)` after the database connects. On startup after 09:00,
+  verify either the recovery claim/completion logs or an already-completed
+  skip. At the normal 09:00 execution, verify the claim, eligibility counts,
+  per-type send-result, and completion logs. The logs do not include phone
+  numbers, customer names, API keys, or connection strings.

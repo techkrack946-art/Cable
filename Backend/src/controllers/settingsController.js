@@ -69,6 +69,36 @@ const validateTemplates = (templates) => {
     return errors;
 };
 
+const buildSettingsUpdate = (body) => {
+    const updates = {};
+    if (body?.smsTemplates) updates.smsTemplates = body.smsTemplates;
+    if (body?.adminDetails) {
+        const { businessName, contactNumber, villageArea } = body.adminDetails;
+        if (![businessName, contactNumber, villageArea].every((value) => typeof value === "string")) {
+            return { error: "Admin details must be valid strings" };
+        }
+        if (!businessName.trim() || !villageArea.trim()) {
+            return { error: "Business name and village / area are required" };
+        }
+        updates.adminDetails = {
+            businessName: businessName.trim(),
+            contactNumber: contactNumber.trim(),
+            villageArea: villageArea.trim()
+        };
+    }
+
+    if (!Object.keys(updates).length) {
+        return { error: "Settings update cannot be empty" };
+    }
+
+    const setOnInsert = { key: "global" };
+    if (!Object.prototype.hasOwnProperty.call(updates, "smsTemplates")) {
+        setOnInsert.smsTemplates = DEFAULT_SMS_TEMPLATES;
+    }
+
+    return { update: { $set: updates, $setOnInsert: setOnInsert } };
+};
+
 const getSettings = async (req, res) => {
     try {
         const settings = await completeSettings();
@@ -85,25 +115,15 @@ const updateSettings = async (req, res) => {
         return res.status(400).json({ message: "Template validation failed", errors });
     }
 
+    const { update, error } = buildSettingsUpdate(req.body);
+    if (error) {
+        return res.status(400).json({ message: error });
+    }
+
     try {
-        const updates = {};
-        if (req.body?.smsTemplates) updates.smsTemplates = req.body.smsTemplates;
-        if (req.body?.adminDetails) {
-            const { businessName, contactNumber, villageArea } = req.body.adminDetails;
-            if (![businessName, contactNumber, villageArea].every((value) => typeof value === "string")) {
-                return res.status(400).json({ message: "Admin details must be valid strings" });
-            }
-            if (!businessName.trim() || !villageArea.trim()) {
-                return res.status(400).json({ message: "Business name and village / area are required" });
-            }
-            updates.adminDetails = { businessName: businessName.trim(), contactNumber: contactNumber.trim(), villageArea: villageArea.trim() };
-        }
-        if (!Object.keys(updates).length) {
-            return res.status(400).json({ message: "Settings update cannot be empty" });
-        }
         const settings = await Settings.findOneAndUpdate(
             { key: "global" },
-            { $set: updates, $setOnInsert: { key: "global", smsTemplates: DEFAULT_SMS_TEMPLATES } },
+            update,
             { upsert: true, returnDocument: "after", runValidators: true }
         );
         return res.status(200).json({ message: "Settings saved successfully", smsTemplates: settings.smsTemplates, adminDetails: settings.adminDetails });
@@ -113,4 +133,4 @@ const updateSettings = async (req, res) => {
     }
 };
 
-module.exports = { getSettings, updateSettings, completeSettings };
+module.exports = { getSettings, updateSettings, completeSettings, buildSettingsUpdate };

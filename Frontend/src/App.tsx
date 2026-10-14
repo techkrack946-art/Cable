@@ -114,6 +114,10 @@ function customerStatus(customer: Customer): CustomerStatus {
   return days <= 0 ? "Expired" : days <= 7 ? "Expiring" : "Active";
 }
 
+function customerName(customer: Customer) {
+  return typeof customer.name === "string" ? customer.name : "";
+}
+
 function smsStatus(customer: Customer) {
   const sent = customer.notificationStatus?.threeDay || customer.notificationStatus?.twoDay || customer.notificationStatus?.oneDay;
   return sent ? "Sent" : daysUntil(customer.expiryDate) > 0 && daysUntil(customer.expiryDate) <= 3 ? "Scheduled" : "Failed";
@@ -194,6 +198,7 @@ function Dashboard({ customers, expiryDashboard, loading, onNavigate, onRecharge
 
 function Customers({ customers, expiryDashboard, filter, loading, deletingCustomerId, onAdd, onEdit, onRecharge, onDelete }: { customers: Customer[]; expiryDashboard: ExpiryDashboard; filter: CustomerFilter; loading: boolean; deletingCustomerId?: string; onAdd: () => void; onEdit: (customer: Customer) => void; onRecharge: (customer: Customer) => void; onDelete: (customer: Customer) => void }) {
   const [query, setQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<"original" | "name-asc" | "name-desc">("original");
   const filteredCustomers = useMemo(() => customers.filter((customer) => {
     if (filter === "active") return customerStatus(customer) === "Active";
     if (filter === "expired") {
@@ -206,14 +211,26 @@ function Customers({ customers, expiryDashboard, filter, loading, deletingCustom
     }
     return true;
   }), [customers, expiryDashboard, filter]);
-  const results = useMemo(() => filteredCustomers.filter((customer) => `${customer.name} ${customer.phone} ${customer.stbNumber}`.toLowerCase().includes(query.toLowerCase())), [filteredCustomers, query]);
+  const results = useMemo(() => {
+    const matchingCustomers = filteredCustomers.filter((customer) => `${customerName(customer)} ${customer.phone || ""} ${customer.stbNumber || ""}`.toLowerCase().includes(query.toLowerCase()));
+    if (sortOrder === "original") return matchingCustomers;
+
+    const direction = sortOrder === "name-asc" ? 1 : -1;
+    return matchingCustomers
+      .map((customer, index) => ({ customer, index }))
+      .sort((left, right) => (
+        customerName(left.customer).localeCompare(customerName(right.customer), undefined, { sensitivity: "base" }) * direction
+        || left.index - right.index
+      ))
+      .map(({ customer }) => customer);
+  }, [filteredCustomers, query, sortOrder]);
   const filterLabel = filter === "all" ? "" : ` · ${filter[0].toUpperCase()}${filter.slice(1)}`;
   return <>
     <PageHeading title="Customers" subtitle="Manage customer details, plans, and connection status."><Button icon="plus" onClick={onAdd}>Add Customer</Button></PageHeading>
-    <section className="panel"><div className="toolbar"><label className="search-box"><Icon name="search" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, mobile, or STB number" /></label><span className="record-count">{loading ? "Loading..." : `${results.length} customers shown${filterLabel}`}</span></div>
+    <section className="panel"><div className="toolbar"><div className="customer-controls"><label className="search-box"><Icon name="search" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, mobile, or STB number" /></label><select className="customer-sort" aria-label="Sort customers by name" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}><option value="original">Original order</option><option value="name-asc">Name: A–Z</option><option value="name-desc">Name: Z–A</option></select></div><span className="record-count">{loading ? "Loading..." : `${results.length} customers shown${filterLabel}`}</span></div>
       <EmptyTableScroll><table><thead><tr><th>Name</th><th>Mobile</th><th>STB Number</th><th>Plan</th><th>Expiry Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         {loading && <tr><td colSpan={7}>Loading customers...</td></tr>}
-        {!loading && results.map((customer) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customer.name.split(" ").map((name) => name[0]).join("")}</span><strong>{customer.name}</strong></div></td><td>{customer.phone}</td><td><span className="mono">{customer.stbNumber}</span></td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><StatusBadge status={customerStatus(customer)} /></td><td><div className="action-group"><button className="row-action muted" onClick={() => onEdit(customer)}><Icon name="edit" size={13} /> Edit</button><button className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button><button className="row-action danger" onClick={() => onDelete(customer)} disabled={deletingCustomerId === customer._id}><Icon name="trash" size={13} /> {deletingCustomerId === customer._id ? "Deleting..." : "Delete"}</button></div></td></tr>)}
+        {!loading && results.map((customer) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customerName(customer).split(/\s+/).filter(Boolean).map((name) => name[0]).join("")}</span><strong>{customerName(customer)}</strong></div></td><td>{customer.phone}</td><td><span className="mono">{customer.stbNumber}</span></td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><StatusBadge status={customerStatus(customer)} /></td><td><div className="action-group"><button className="row-action muted" onClick={() => onEdit(customer)}><Icon name="edit" size={13} /> Edit</button><button className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button><button className="row-action danger" onClick={() => onDelete(customer)} disabled={deletingCustomerId === customer._id}><Icon name="trash" size={13} /> {deletingCustomerId === customer._id ? "Deleting..." : "Delete"}</button></div></td></tr>)}
         {!loading && !results.length && <tr><td colSpan={7}>No customers found.</td></tr>}
       </tbody></table></EmptyTableScroll>
     </section>

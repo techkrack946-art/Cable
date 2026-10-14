@@ -138,11 +138,14 @@ td strong { color: #334057; font-size: 11px; font-weight: 600; }
 .mono { color: #536079; font-family: ui-monospace, monospace; font-size: 10px; }
 .amount { color: #17233c; font-weight: 600; }
 
-.toolbar { min-height: 74px; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #edf0f5; }
+.toolbar { min-height: 74px; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #edf0f5; }
+.customer-controls { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .search-box { width: min(390px, 65%); height: 40px; padding: 0 13px; border: 1px solid #e1e6ee; border-radius: 9px; display: flex; align-items: center; gap: 10px; color: #8c97a9; background: #fbfcfd; }
 .search-box:focus-within { border-color: #8fb2ff; box-shadow: 0 0 0 3px #edf3ff; }
 .search-box input { min-width: 0; flex: 1; border: 0; outline: 0; color: #344057; background: transparent; font-size: 11px; }
 .search-box input::placeholder { color: #a0a9b7; }
+.customer-sort { max-width: 170px; height: 40px; padding: 0 10px; border: 1px solid #e1e6ee; border-radius: 9px; color: #536079; background: #fbfcfd; font-size: 11px; }
+.customer-sort:focus-visible { border-color: #8fb2ff; outline: 0; box-shadow: 0 0 0 3px #edf3ff; }
 .record-count { color: #9aa4b4; font-size: 10px; }
 
 .notice { margin-bottom: 18px; padding: 15px 18px; border: 1px solid #dbe6ff; border-radius: 12px; display: flex; align-items: center; gap: 13px; background: #f3f7ff; }
@@ -236,8 +239,10 @@ td strong { color: #334057; font-size: 11px; font-weight: 600; }
   .panel-heading p { font-size: 9px; }
   th { padding: 0 14px; }
   td { height: 58px; padding: 0 14px; }
-  .toolbar { padding: 12px; }
-  .search-box { width: 100%; }
+  .toolbar { padding: 12px; align-items: stretch; flex-direction: column; }
+  .customer-controls { width: 100%; }
+  .search-box { width: auto; flex: 1; }
+  .customer-sort { max-width: 145px; }
   .record-count { display: none; }
   .sms-summary { gap: 18px; overflow-x: auto; }
   .sms-summary > div { flex: 0 0 auto; }

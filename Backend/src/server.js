@@ -9,6 +9,8 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const smsRoutes = require("./routes/smsRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const { checkExpiryReminders } = require("./services/reminderService");
+const DailyReminderRun = require("./models/dailyReminderRun");
+const { createReminderScheduler } = require("./services/reminderScheduler");
 
 const app = express();
 
@@ -51,21 +53,38 @@ const reminderSchedulerKey = Symbol.for("cable-connect.reminder-scheduler");
 
 const startReminderScheduler = () => {
     if (global[reminderSchedulerKey]) {
-        return;
+        return global[reminderSchedulerKey];
     }
 
-    global[reminderSchedulerKey] = cron.schedule(
+    const scheduler = createReminderScheduler({
+        DailyReminderRun,
+        runReminders: checkExpiryReminders
+    });
+    const scheduledTask = cron.schedule(
         "0 9 * * *",
-        () => checkExpiryReminders(),
-        { timezone: "Asia/Kolkata" }
+        async () => {
+            try {
+                await scheduler.runScheduled();
+            } catch (error) {
+                console.error(`Scheduled reminder run failed (error=${error.name})`);
+            }
+        },
+        { timezone: "Asia/Kolkata", noOverlap: true }
     );
-    console.log("Reminder scheduler started for 9:00 AM Asia/Kolkata");
+    console.log("Reminder scheduler registered (cron: 0 9 * * *, timezone: Asia/Kolkata)");
+    global[reminderSchedulerKey] = { scheduler, scheduledTask };
+    return global[reminderSchedulerKey];
 };
 
 const startServer = async () => {
     await connectDB();
-    await checkExpiryReminders();
-    startReminderScheduler();
+    await DailyReminderRun.init();
+    const { scheduler } = startReminderScheduler();
+    try {
+        await scheduler.recoverOnStartup();
+    } catch (error) {
+        console.error(`Startup reminder recovery failed (error=${error.name})`);
+    }
 
     app.listen(PORT, () => {
         console.log(`Server listening on port ${PORT}`);

@@ -4,9 +4,13 @@ const { sendSMS } = require("./smsService");
 
 const IST_TIMEZONE = "Asia/Kolkata";
 const ONE_DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
+const reminders = [
+    { days: 3, field: "threeDay", label: "THREE_DAY" },
+    { days: 2, field: "twoDay", label: "TWO_DAY" },
+    { days: 1, field: "oneDay", label: "ONE_DAY" }
+];
+let executionInProgress = false;
 
-// Build a calendar-day number from the date as seen in IST.
-// Using local date parts avoids comparing timestamp hours or shifting dates.
 const istDayNumber = (date) => {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: IST_TIMEZONE,
@@ -31,43 +35,73 @@ const formatIstDate = (date) => {
     return `${values.day}-${values.month}-${values.year}`;
 };
 
+const getReminderForExpiry = (expiryDate, today, notificationStatus = {}) => {
+    const validExpiryDate = expiryDate instanceof Date ? expiryDate : new Date(expiryDate);
+    if (Number.isNaN(validExpiryDate.getTime())) {
+        return null;
+    }
+
+    const daysRemaining = (istDayNumber(validExpiryDate) - istDayNumber(today)) / ONE_DAY_IN_MILLISECONDS;
+    return reminders.find(({ days, field }) => (
+        days === daysRemaining && !notificationStatus[field]
+    )) || null;
+};
+
 const replaceTemplatePlaceholders = (template, customer, expiryDate, daysLeft) => template
     .replaceAll("{name}", customer.name)
     .replaceAll("{expiryDate}", formatIstDate(expiryDate))
     .replaceAll("{daysLeft}", String(daysLeft));
 
 const checkExpiryReminders = async () => {
+    if (executionInProgress) {
+        console.warn("Reminder execution skipped: another execution is still in progress");
+        return;
+    }
+
+    executionInProgress = true;
+    console.log(`Reminder execution started (${new Date().toISOString()})`);
+
     try {
         const customers = await Customer.find();
         let templates = DEFAULT_SMS_TEMPLATES;
         try {
             const settings = await completeSettings();
             templates = settings.smsTemplates;
-        } catch (error) {
-            console.error("Unable to load SMS templates; using defaults:", error.message);
+        } catch {
+            console.error("Unable to load SMS templates; using defaults");
         }
         const today = istDayNumber(new Date());
-        const reminders = [
-            { days: 3, field: "threeDay", label: "THREE_DAY" },
-            { days: 2, field: "twoDay", label: "TWO_DAY" },
-            { days: 1, field: "oneDay", label: "ONE_DAY" }
-        ];
+        const eligibleCustomers = [];
+        let invalidExpiryDates = 0;
 
         for (const customer of customers) {
             const expiryDate = new Date(customer.expiryDate);
 
             if (Number.isNaN(expiryDate.getTime())) {
-                console.error(`Skipping customer ${customer._id}: invalid expiryDate`);
+                invalidExpiryDates += 1;
                 continue;
             }
 
-            const daysRemaining = (istDayNumber(expiryDate) - today) / ONE_DAY_IN_MILLISECONDS;
-            const reminder = reminders.find(({ days }) => days === daysRemaining);
-
-            if (!reminder || customer.notificationStatus?.[reminder.field]) {
-                continue;
+            const reminder = getReminderForExpiry(
+                expiryDate,
+                new Date(today),
+                customer.notificationStatus
+            );
+            if (reminder) {
+                eligibleCustomers.push({ customer, expiryDate, reminder });
             }
+        }
 
+        const eligibleCounts = reminders.map(({ field, label }) => (
+            `${label}=${eligibleCustomers.filter(({ reminder }) => reminder.field === field).length}`
+        ));
+        console.log(
+            `Reminder eligibility: customers=${customers.length}, ${eligibleCounts.join(", ")}, invalidExpiryDates=${invalidExpiryDates}`
+        );
+
+        let sentCount = 0;
+        let failedCount = 0;
+        for (const { customer, expiryDate, reminder } of eligibleCustomers) {
             const message = replaceTemplatePlaceholders(
                 templates[reminder.field],
                 customer,
@@ -75,34 +109,40 @@ const checkExpiryReminders = async () => {
                 reminder.days
             );
 
-            console.log(`Customer: ${customer.name}`);
-            console.log(`Reminder: ${reminder.label}`);
-            console.log(`Phone: ${customer.phone}`);
-            console.log("Sending SMS...");
-
             try {
                 await sendSMS(customer.phone, message);
+            } catch (error) {
+                failedCount += 1;
+                console.error(`SMS failed (reminder=${reminder.label}, error=${error.name})`);
+                continue;
+            }
 
-                if (!customer.notificationStatus) {
-                    customer.notificationStatus = {};
-                }
-
+            try {
+                if (!customer.notificationStatus) customer.notificationStatus = {};
                 customer.notificationStatus[reminder.field] = true;
                 await customer.save();
-
-                console.log("SMS sent successfully");
-                console.log(`notificationStatus.${reminder.field} = true`);
             } catch (error) {
+                failedCount += 1;
                 console.error(
-                    `SMS failed for ${customer.name} (${reminder.label}): ${error.message}`
+                    `SMS accepted but reminder status save failed (reminder=${reminder.label}, error=${error.name})`
                 );
+                continue;
             }
+
+            sentCount += 1;
+            console.log(`SMS sent successfully (reminder=${reminder.label})`);
         }
+
+        console.log(`Reminder execution completed: sent=${sentCount}, failed=${failedCount}`);
     } catch (error) {
-        console.error("Reminder check failed:", error);
+        console.error(`Reminder execution failed unexpectedly (error=${error.name})`);
+        throw error;
+    } finally {
+        executionInProgress = false;
     }
 };
 
 module.exports = {
-    checkExpiryReminders
+    checkExpiryReminders,
+    getReminderForExpiry
 };
