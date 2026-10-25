@@ -7,7 +7,10 @@ This project contains:
   Asia/Kolkata reminder scheduler deployed to Render.
 
 The current application does not use administrator authentication or sessions.
-Do not add backend credentials to `VITE_*` variables.
+For this temporary deployment, API endpoints are unauthenticated. In particular,
+SMS sending and customer-data endpoints are publicly callable and must receive
+authentication and authorization before production use. Do not expose backend
+credentials or auth secrets in `VITE_*` variables.
 
 ## 1. MongoDB Atlas
 
@@ -121,6 +124,19 @@ in `Frontend/.env.local`.
 - Customer create, edit, delete, and recharge operations work.
 - Settings and SMS templates load and save.
 - TextBee credentials are present only in Render backend variables.
+- Manual SMS requests use `POST /api/sms/customers/:id/manual` with a JSON
+  `{ "message": "..." }` body. No login credentials are required in this
+  temporary version. TextBee credentials remain backend-only.
+- Add authentication and appropriate admin authorization to these endpoints
+  before a production deployment:
+  - SMS sending: `POST /api/sms/customers/:id/manual` and
+    `POST /api/sms/test`. The test endpoint can send to a caller-supplied
+    number and especially must be restricted or removed.
+  - Customer records: all methods under `/api/customers` (`GET`/`POST /`,
+    `GET`/`PUT`/`DELETE /:id`, and `POST /:id/recharge`).
+  - Customer expiry dashboard: `GET /api/dashboard/expiry`, which returns
+    customer data.
+  - Settings access and updates: `GET`/`PUT /api/settings`.
 - The 3-day, 2-day, and 1-day reminder categories retain their existing
   duplicate-prevention flags.
 - Render logs show `Reminder scheduler registered (cron: 0 9 * * *,

@@ -135,6 +135,15 @@ td strong { color: #334057; font-size: 11px; font-weight: 600; }
 .row-action.danger { color: #d84e56; border-color: #f2cfd2; background: #fff7f7; }
 .row-action:disabled { cursor: wait; opacity: .65; }
 .action-group { display: flex; gap: 6px; }
+.sms-spinner { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; animation: sms-spin .7s linear infinite; }
+@keyframes sms-spin { to { transform: rotate(360deg); } }
+.sms-modal-body { padding: 22px; }
+.sms-recipient { display: grid; gap: 6px; color: #8e99aa; font-size: 10px; }
+.sms-recipient strong { color: #334057; font-size: 12px; font-weight: 600; }
+.sms-modal-error { padding: 0 22px 12px; }
+.sms-toast { position: fixed; right: 24px; bottom: 24px; z-index: 100; max-width: min(420px, calc(100vw - 32px)); padding: 13px 15px; border: 1px solid #cde9dc; border-radius: 10px; display: flex; align-items: center; gap: 14px; color: #176b4f; background: #f0faf5; box-shadow: 0 10px 30px rgba(19, 35, 65, .16); font-size: 12px; }
+.sms-toast-error { border-color: #f2cfd2; color: #a72f38; background: #fff4f4; }
+.sms-toast button { padding: 0; border: 0; display: grid; place-items: center; color: currentColor; background: transparent; }
 .mono { color: #536079; font-family: ui-monospace, monospace; font-size: 10px; }
 .amount { color: #17233c; font-weight: 600; }
 

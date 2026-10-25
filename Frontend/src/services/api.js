@@ -36,6 +36,19 @@ export async function rechargeCustomer(id, data) {
   return response.data.customer;
 }
 
+export async function sendCustomerSms(id, message) {
+  try {
+    const response = await api.post(`/sms/customers/${encodeURIComponent(id)}/manual`, { message });
+    return response.data;
+  } catch (error) {
+    const failure = error.response?.data;
+    const providerStatus = failure?.providerStatus;
+    const message = failure?.message || "Unable to send SMS.";
+    const detail = providerStatus ? ` (HTTP ${providerStatus})` : "";
+    throw new Error(`${message}${detail}`);
+  }
+}
+
 export async function getExpiryDashboard() {
   const response = await api.get("/dashboard/expiry");
   return response.data;

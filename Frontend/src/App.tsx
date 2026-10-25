@@ -1,10 +1,10 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 // @ts-ignore The API module is intentionally kept as the requested JavaScript service.
-import { createCustomer, deleteCustomer, getCustomers, getExpiryDashboard, getSettings, rechargeCustomer, updateCustomer, updateSettings } from "./services/api";
+import { createCustomer, deleteCustomer, getCustomers, getExpiryDashboard, getSettings, rechargeCustomer, sendCustomerSms, updateCustomer, updateSettings } from "./services/api";
 
 type Page = "Dashboard" | "Customers" | "Recharges" | "SMS" | "Settings";
 type CustomerFilter = "all" | "active" | "expiring" | "expired";
-type Modal = "customer" | "recharge" | null;
+type Modal = "customer" | "recharge" | "sms" | null;
 type CustomerStatus = "Active" | "Expiring" | "Expired";
 type NotificationStatus = { threeDay: boolean; twoDay: boolean; oneDay: boolean };
 
@@ -196,7 +196,7 @@ function Dashboard({ customers, expiryDashboard, loading, onNavigate, onRecharge
   </>;
 }
 
-function Customers({ customers, expiryDashboard, filter, loading, deletingCustomerId, onAdd, onEdit, onRecharge, onDelete }: { customers: Customer[]; expiryDashboard: ExpiryDashboard; filter: CustomerFilter; loading: boolean; deletingCustomerId?: string; onAdd: () => void; onEdit: (customer: Customer) => void; onRecharge: (customer: Customer) => void; onDelete: (customer: Customer) => void }) {
+function Customers({ customers, expiryDashboard, filter, loading, deletingCustomerId, sendingSmsCustomerId, onAdd, onEdit, onRecharge, onDelete, onSendSms }: { customers: Customer[]; expiryDashboard: ExpiryDashboard; filter: CustomerFilter; loading: boolean; deletingCustomerId?: string; sendingSmsCustomerId?: string; onAdd: () => void; onEdit: (customer: Customer) => void; onRecharge: (customer: Customer) => void; onDelete: (customer: Customer) => void; onSendSms: (customer: Customer) => void }) {
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"original" | "name-asc" | "name-desc">("original");
   const filteredCustomers = useMemo(() => customers.filter((customer) => {
@@ -230,7 +230,7 @@ function Customers({ customers, expiryDashboard, filter, loading, deletingCustom
     <section className="panel"><div className="toolbar"><div className="customer-controls"><label className="search-box"><Icon name="search" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, mobile, or STB number" /></label><select className="customer-sort" aria-label="Sort customers by name" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}><option value="original">Original order</option><option value="name-asc">Name: A–Z</option><option value="name-desc">Name: Z–A</option></select></div><span className="record-count">{loading ? "Loading..." : `${results.length} customers shown${filterLabel}`}</span></div>
       <EmptyTableScroll><table><thead><tr><th>Name</th><th>Mobile</th><th>STB Number</th><th>Plan</th><th>Expiry Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         {loading && <tr><td colSpan={7}>Loading customers...</td></tr>}
-        {!loading && results.map((customer) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customerName(customer).split(/\s+/).filter(Boolean).map((name) => name[0]).join("")}</span><strong>{customerName(customer)}</strong></div></td><td>{customer.phone}</td><td><span className="mono">{customer.stbNumber}</span></td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><StatusBadge status={customerStatus(customer)} /></td><td><div className="action-group"><button type="button" className="row-action muted" onClick={() => onEdit(customer)}><Icon name="edit" size={13} /> Edit</button><button type="button" className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button><button type="button" className="row-action danger" onClick={() => onDelete(customer)} disabled={deletingCustomerId === customer._id}><Icon name="trash" size={13} /> {deletingCustomerId === customer._id ? "Deleting..." : "Delete"}</button></div></td></tr>)}
+        {!loading && results.map((customer) => <tr key={customer._id}><td><div className="customer-cell"><span className="avatar">{customerName(customer).split(/\s+/).filter(Boolean).map((name) => name[0]).join("")}</span><strong>{customerName(customer)}</strong></div></td><td>{customer.phone}</td><td><span className="mono">{customer.stbNumber}</span></td><td>{customer.plan}</td><td>{formatDate(customer.expiryDate)}</td><td><StatusBadge status={customerStatus(customer)} /></td><td><div className="action-group"><button type="button" className="row-action muted" onClick={() => onEdit(customer)}><Icon name="edit" size={13} /> Edit</button><button type="button" className="row-action" onClick={() => onRecharge(customer)}><Icon name="refresh" size={13} /> Recharge</button><button type="button" className="row-action" onClick={() => onSendSms(customer)} disabled={sendingSmsCustomerId === customer._id}>{sendingSmsCustomerId === customer._id ? <span className="sms-spinner" aria-hidden="true" /> : <Icon name="message" size={13} />}{sendingSmsCustomerId === customer._id ? "Sending..." : "Send SMS"}</button><button type="button" className="row-action danger" onClick={() => onDelete(customer)} disabled={deletingCustomerId === customer._id}><Icon name="trash" size={13} /> {deletingCustomerId === customer._id ? "Deleting..." : "Delete"}</button></div></td></tr>)}
         {!loading && !results.length && <tr><td colSpan={7}>No customers found.</td></tr>}
       </tbody></table></EmptyTableScroll>
     </section>
@@ -415,6 +415,46 @@ function RechargeModal({ customer, customers, onClose, onSaved }: { customer?: C
   return <ModalShell title="Record Recharge" subtitle="This records a recharge only. No payment will be processed." onClose={onClose}><form onSubmit={submit}><div className="form-grid single"><label className="field"><span>Customer</span><select name="customerId" defaultValue={customer?._id || customers[0]?._id || ""} required><option value="" disabled>Select a customer</option>{customers.map((item) => <option value={item._id} key={item._id}>{item.name} - {item.stbNumber}</option>)}</select></label><Field label="Amount" name="amount" type="number" defaultValue={customer ? String(customer.amount) : ""} required /><Field label="Recharge Date" name="rechargeDate" type="date" defaultValue={todayInputDate()} required /></div>{error && <p className="field-error">{error}</p>}<div className="modal-footer"><Button type="button" variant="secondary" icon="x" onClick={onClose}>Cancel</Button><Button type="submit" icon="save" disabled={saving || !customers.length}>{saving ? "Processing..." : "Save Recharge"}</Button></div></form></ModalShell>;
 }
 
+const defaultManualSmsMessage = "Hello {name}, this is a message from CableConnect. Please contact us regarding your cable TV subscription. Thank you.";
+
+function ManualSmsModal({ customer, sending, onClose, onSend }: { customer: Customer; sending: boolean; onClose: () => void; onSend: (message: string) => Promise<void> }) {
+  const [message, setMessage] = useState(() => defaultManualSmsMessage.replace(/\{name\}/g, customerName(customer)));
+  const [error, setError] = useState("");
+  const submissionInProgress = useRef(false);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submissionInProgress.current) return;
+    if (!message.trim()) {
+      setError("SMS message cannot be empty.");
+      return;
+    }
+    if (!window.confirm(`Send an SMS to ${customerName(customer)} at ${customer.phone}?`)) return;
+    submissionInProgress.current = true;
+    setError("");
+    try {
+      await onSend(message.trim().replace(/\{name\}/g, customerName(customer)));
+      onClose();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to send SMS.");
+    } finally {
+      submissionInProgress.current = false;
+    }
+  };
+
+  return <ModalShell title="Send SMS" subtitle="Review the registered mobile number and message before sending." onClose={sending ? () => {} : onClose}>
+    <form onSubmit={submit}>
+      <div className="form-grid single sms-modal-body">
+        <div className="sms-recipient"><span>Customer</span><strong>{customerName(customer)}</strong></div>
+        <div className="sms-recipient"><span>Registered mobile number</span><strong>{customer.phone}</strong></div>
+        <label className="field field-wide"><span>SMS message</span><textarea rows={5} value={message} onChange={(event) => setMessage(event.target.value)} required disabled={sending} /></label>
+      </div>
+      {error && <p className="field-error sms-modal-error" role="alert">{error}</p>}
+      <div className="modal-footer"><Button type="button" variant="secondary" icon="x" onClick={onClose} disabled={sending}>Cancel</Button><Button type="submit" icon="message" disabled={sending || !message.trim()}>{sending ? <><span className="sms-spinner" aria-hidden="true" /> Sending...</> : "Send SMS"}</Button></div>
+    </form>
+  </ModalShell>;
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>("Dashboard");
   const [customerFilter, setCustomerFilter] = useState<CustomerFilter>("all");
@@ -432,13 +472,17 @@ export default function App() {
   const [modal, setModal] = useState<Modal>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer>();
   const [rechargeCustomer, setRechargeCustomer] = useState<Customer>();
+  const [smsCustomer, setSmsCustomer] = useState<Customer>();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [expiryDashboard, setExpiryDashboard] = useState<ExpiryDashboard>(emptyExpiryDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [deletingCustomerId, setDeletingCustomerId] = useState<string>();
+  const [sendingSmsCustomerId, setSendingSmsCustomerId] = useState<string>();
+  const [smsToast, setSmsToast] = useState<{ type: "success" | "error"; message: string }>();
   const deletingCustomerIds = useRef(new Set<string>());
+  const sendingSmsCustomerIds = useRef(new Set<string>());
   const notificationDesktopRef = useRef<HTMLDivElement>(null);
   const notificationMobileRef = useRef<HTMLDivElement>(null);
   const profileSidebarRef = useRef<HTMLDivElement>(null);
@@ -463,6 +507,12 @@ export default function App() {
   useEffect(() => {
     refreshData().catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!smsToast) return;
+    const timer = window.setTimeout(() => setSmsToast(undefined), 4500);
+    return () => window.clearTimeout(timer);
+  }, [smsToast]);
 
   useEffect(() => {
     try {
@@ -539,6 +589,24 @@ export default function App() {
 
   const openCustomer = (customer?: Customer) => { setSuccessMessage(""); setEditingCustomer(customer); setModal("customer"); };
   const openRecharge = (customer?: Customer) => { setRechargeCustomer(customer); setModal("recharge"); };
+  const openSms = (customer: Customer) => { setSmsCustomer(customer); setModal("sms"); };
+  const handleManualSms = async (message: string) => {
+    if (!smsCustomer || sendingSmsCustomerIds.current.has(smsCustomer._id)) return;
+    const customerId = smsCustomer._id;
+    sendingSmsCustomerIds.current.add(customerId);
+    setSendingSmsCustomerId(customerId);
+    try {
+      await sendCustomerSms(customerId, message);
+      setSmsToast({ type: "success", message: `SMS sent successfully to ${customerName(smsCustomer)}.` });
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Unable to send SMS.";
+      setSmsToast({ type: "error", message });
+      throw requestError;
+    } finally {
+      sendingSmsCustomerIds.current.delete(customerId);
+      setSendingSmsCustomerId(undefined);
+    }
+  };
 
   const notificationCount = getNotificationIds(expiryDashboard).filter((id) => !dismissedNotificationIds.has(id)).length;
   const dismissNotification = (id: string) => {
@@ -563,8 +631,10 @@ export default function App() {
     <aside className="sidebar"><button className="brand brand-link" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={23} /></span><div><strong>CableConnect</strong><span>Village Cable Network</span></div></button><nav>{navItems.map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => navigate(item.label)}><Icon name={item.icon} size={19} />{item.label}{page === item.label && <span className="nav-indicator" />}</button>)}</nav><div className="sidebar-foot" ref={profileSidebarRef}><button className="profile-trigger" onClick={() => toggleProfile("sidebar")} aria-expanded={profileOpen && profileSource === "sidebar"} aria-label="Open administrator profile"><div className="admin-avatar">AD</div><div><strong>Administrator</strong><span>Village Cable Network</span></div><Icon name="chevron" size={16} /></button>{profileOpen && profileSource === "sidebar" && <ProfileMenu onNavigate={navigate} onClose={() => setProfileOpen(false)} />}</div></aside>
     <div className="mobile-header"><button className="brand brand-link" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={20} /></span><div><strong>CableConnect</strong><span>Village Cable Network</span></div></button><div className="header-popover" ref={notificationMobileRef}><button className="icon-button has-dot" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label={`Open notifications${notificationCount ? `, ${notificationCount} alerts` : ""}`} aria-expanded={notificationsOpen}><Icon name="bell" size={20} />{notificationCount > 0 && <span className="notification-count">{notificationCount}</span>}</button>{notificationsOpen && <NotificationPanel expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onClose={() => setNotificationsOpen(false)} dismissedIds={dismissedNotificationIds} onDismiss={dismissNotification} />}</div></div>
     <div className="mobile-nav">{navItems.map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => setPage(item.label)}><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}</div>
-    <main><header className="topbar"><div className="topbar-date"><button className="header-brand" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={18} /></span><span><strong>CableConnect</strong><small>Village Cable Network</small></span></button><span>{formatDate(new Date().toISOString())}</span></div><div className="topbar-actions"><div className="header-popover" ref={notificationDesktopRef}><button className="icon-button has-dot" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label={`Open notifications${notificationCount ? `, ${notificationCount} alerts` : ""}`} aria-expanded={notificationsOpen}><Icon name="bell" size={20} />{notificationCount > 0 && <span className="notification-count">{notificationCount}</span>}</button>{notificationsOpen && <NotificationPanel expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onClose={() => setNotificationsOpen(false)} dismissedIds={dismissedNotificationIds} onDismiss={dismissNotification} />}</div><div className="header-popover" ref={profileDesktopRef}><button className="top-avatar profile-trigger-button" onClick={() => toggleProfile("top")} aria-label="Open administrator profile" aria-expanded={profileOpen && profileSource === "top"}>AD</button>{profileOpen && profileSource === "top" && <ProfileMenu onNavigate={navigate} onClose={() => setProfileOpen(false)} />}</div></div></header><div className="content">{error && <ErrorNotice message={error} />}{successMessage && <div className="notice" role="status"><div><strong>{successMessage}</strong></div></div>}{page === "Dashboard" && <Dashboard customers={customers} expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onRecharge={openRecharge} />}{page === "Customers" && <Customers customers={customers} expiryDashboard={expiryDashboard} filter={customerFilter} loading={loading} deletingCustomerId={deletingCustomerId} onAdd={() => openCustomer()} onEdit={openCustomer} onRecharge={openRecharge} onDelete={handleDelete} />}{page === "Recharges" && <Recharges customers={customers} loading={loading} onRecharge={openRecharge} />}{page === "SMS" && <SmsHistory customers={customers} />}{page === "Settings" && <Settings />}</div></main>
+    <main><header className="topbar"><div className="topbar-date"><button className="header-brand" onClick={() => navigate("Dashboard")} aria-label="Go to Dashboard"><span className="brand-mark"><Icon name="tv" size={18} /></span><span><strong>CableConnect</strong><small>Village Cable Network</small></span></button><span>{formatDate(new Date().toISOString())}</span></div><div className="topbar-actions"><div className="header-popover" ref={notificationDesktopRef}><button className="icon-button has-dot" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label={`Open notifications${notificationCount ? `, ${notificationCount} alerts` : ""}`} aria-expanded={notificationsOpen}><Icon name="bell" size={20} />{notificationCount > 0 && <span className="notification-count">{notificationCount}</span>}</button>{notificationsOpen && <NotificationPanel expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onClose={() => setNotificationsOpen(false)} dismissedIds={dismissedNotificationIds} onDismiss={dismissNotification} />}</div><div className="header-popover" ref={profileDesktopRef}><button className="top-avatar profile-trigger-button" onClick={() => toggleProfile("top")} aria-label="Open administrator profile" aria-expanded={profileOpen && profileSource === "top"}>AD</button>{profileOpen && profileSource === "top" && <ProfileMenu onNavigate={navigate} onClose={() => setProfileOpen(false)} />}</div></div></header><div className="content">{error && <ErrorNotice message={error} />}{successMessage && <div className="notice" role="status"><div><strong>{successMessage}</strong></div></div>}{page === "Dashboard" && <Dashboard customers={customers} expiryDashboard={expiryDashboard} loading={loading} onNavigate={navigate} onRecharge={openRecharge} />}{page === "Customers" && <Customers customers={customers} expiryDashboard={expiryDashboard} filter={customerFilter} loading={loading} deletingCustomerId={deletingCustomerId} sendingSmsCustomerId={sendingSmsCustomerId} onAdd={() => openCustomer()} onEdit={openCustomer} onRecharge={openRecharge} onDelete={handleDelete} onSendSms={openSms} />}{page === "Recharges" && <Recharges customers={customers} loading={loading} onRecharge={openRecharge} />}{page === "SMS" && <SmsHistory customers={customers} />}{page === "Settings" && <Settings />}</div></main>
     {modal === "customer" && <CustomerModal customer={editingCustomer} onClose={() => setModal(null)} onSaved={handleCustomerSaved} />}
     {modal === "recharge" && <RechargeModal customer={rechargeCustomer} customers={customers} onClose={() => setModal(null)} onSaved={refreshData} />}
+    {modal === "sms" && smsCustomer && <ManualSmsModal customer={smsCustomer} sending={sendingSmsCustomerId === smsCustomer._id} onClose={() => setModal(null)} onSend={handleManualSms} />}
+    {smsToast && <div className={`sms-toast sms-toast-${smsToast.type}`} role={smsToast.type === "error" ? "alert" : "status"}><span>{smsToast.message}</span><button type="button" onClick={() => setSmsToast(undefined)} aria-label="Dismiss SMS notification"><Icon name="close" size={15} /></button></div>}
   </div>;
 }
